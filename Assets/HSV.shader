@@ -3,7 +3,9 @@
 	Properties
 	{
 		_MainTex ("Texture", 2D) = "white" {}
-		_AddHSV("AddHSV", Vector) = (0,0,0,0)
+		[Color]
+		_Color("Color", Color) = (0,0,0,0)
+		_AddHSV("AddHSV", Color) = (0,0,0,0)
 	}
 	SubShader
 	{
@@ -30,21 +32,27 @@
 				float4 vertex : SV_POSITION;
 			};
 
-			float3 rgb2hsv(float3 rgb)
-			{
-				float3 hsv;
-				// RGBで最大の成分
-				float maxValue = max(rgb.r,max(rgb.g,rgb.b));
-				// RGBで最小の成分
-				float minValue = min(rgb.r,min(rgb.g,rgb.b));
-				// 最小と最大の差
-				float delta = maxValue - minValue;
+        // RGB->HSV変換
+        float3 rgb2hsv(float3 rgb)
+        {
+            float4 K = float4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
+            float4 p = rgb.g < rgb.b ? float4(rgb.bg, K.wz) : float4(rgb.gb, K.xy);
+            float4 q = rgb.r < p.x ? float4(p.xyw, rgb.r) : float4(rgb.r, p.yzx);
 
-				// V(明度)
-				hsv.z = maxValue;
-				// S(彩度)
-				hsv.y = delta / maxValue;
-			}
+            float d = q.x - min(q.w, q.y);
+            float e = 1.0e-10;
+            return float3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
+        }
+
+
+
+			   // HSV->RGB変換
+        float3 hsv2rgb(float3 hsv)
+        {
+            float4 K = float4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+            float3 p = abs(frac(hsv.xxx + K.xyz) * 6.0 - K.www);
+            return hsv.z * lerp(K.xxx, saturate(p - K.xxx), hsv.y);
+        }
 
 			v2f vert (appdata v)
 			{
@@ -55,13 +63,13 @@
 			}
 			
 			sampler2D _MainTex;
+			float3 _Color;
+			float3 _AddHSV;
 
 			fixed4 frag (v2f i) : SV_Target
 			{
-				fixed4 col = tex2D(_MainTex, i.uv);
-				// just invert the colors
-				col.rgb = 1 - col.rgb;
-				return col;
+				fixed3 col = _Color + hsv2rgb(_AddHSV);
+				return fixed4(col,1);
 			}
 			ENDCG
 		}
